@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("MaisonGlace.API")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+c008354affe07d370b00116be468b5982dc88e76")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+d052637c089efc1a12dd18e878efb2aa6d42e001")]
 [assembly: System.Reflection.AssemblyProductAttribute("MaisonGlace.API")]
 [assembly: System.Reflection.AssemblyTitleAttribute("MaisonGlace.API")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

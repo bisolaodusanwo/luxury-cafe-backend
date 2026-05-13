@@ -36,8 +36,8 @@ public class BookingsController : ControllerBase
 
         var created = await _bookings.CreateAsync(booking);
 
-        // Fire-and-forget — email failures must not break the response
-        _ = SendEmailsAsync(created);
+        // Do not fire-and-forget: run email attempts now so failures are visible in logs.
+        await SendEmailsAsync(created);
 
         return Ok(new { success = true, booking = created });
     }
@@ -91,6 +91,8 @@ public class BookingsController : ControllerBase
 
     private async Task SendEmailsAsync(Booking booking)
     {
+        _logger.LogInformation("Booking email dispatch started for {Ref} to guest {Email}", booking.ReferenceNumber, booking.Email);
+
         try { await _email.SendBookingConfirmationAsync(booking); }
         catch (Exception ex)
         {
@@ -102,5 +104,7 @@ public class BookingsController : ControllerBase
         {
             _logger.LogError(ex, "Admin notification failed for {Ref}", booking.ReferenceNumber);
         }
+
+        _logger.LogInformation("Booking email dispatch completed for {Ref}", booking.ReferenceNumber);
     }
 }

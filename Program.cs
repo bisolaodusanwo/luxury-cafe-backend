@@ -1,5 +1,6 @@
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.IdentityModel.Tokens;
 using MaisonGlace.API.Services;
 using MaisonGlace.API.Settings;
@@ -54,6 +55,11 @@ builder.Services.AddCors(opts =>
 
 var app = builder.Build();
 
+if (string.IsNullOrWhiteSpace(jwtSettings.Secret) || Encoding.UTF8.GetByteCount(jwtSettings.Secret) < 16)
+{
+    app.Logger.LogError("JWT secret is missing or too short. Set Jwt__Secret to at least 16 characters in Render env vars.");
+}
+
 // ── Startup diagnostics for Render logs ───────────────────────────────────
 var envName = app.Environment.EnvironmentName;
 var mongoConn = app.Configuration["MongoDb:ConnectionString"] ?? string.Empty;
@@ -92,20 +98,15 @@ catch (Exception ex)
     app.Logger.LogError(ex, "Admin seed skipped: unable to connect to MongoDB during startup.");
 }
 
-// ── Global exception diagnostics for Render logs ──────────────────────────
-app.Use(async (context, next) =>
+app.UseExceptionHandler(errorApp =>
 {
-    try
+    errorApp.Run(async context =>
     {
-        await next();
-    }
-    catch (Exception ex)
-    {
-        app.Logger.LogError(ex, "Unhandled exception. Path: {Path}; Method: {Method}",
-            context.Request.Path,
-            context.Request.Method);
-        throw;
-    }
+        var ex = context.Features.Get<IExceptionHandlerPathFeature>()?.Error;
+        app.Logger.LogError(ex, "Unhandled exception. Path: {Path}; Method: {Method}", context.Request.Path, context.Request.Method);
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        await context.Response.WriteAsJsonAsync(new { message = "Internal server error" });
+    });
 });
 
 app.UseCors("Frontend");
@@ -113,7 +114,25 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
-app.MapGet("/healthz", () => Results.Ok(new { status = "ok", utc = DateTime.UtcNow }));
+async Task<IResult> HealthCheck(DatabaseContext db, HttpContext context)
+{
+    try
+    {
+        await db.PingAsync(context.RequestAborted);
+        return Results.Ok(new { status = "ok", database = "ok", utc = DateTime.UtcNow });
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogError(ex, "MongoDB ping failed from health endpoint.");
+        return Results.Problem(
+            title: "Database unavailable",
+            detail: "MongoDB ping failed.",
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+}
+
+app.MapGet("/health", HealthCheck);
+app.MapGet("/healthz", HealthCheck);
 
 // Render.com sets the PORT env var; fall back to 8080 for local Docker
 var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
